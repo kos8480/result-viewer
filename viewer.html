@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>결과지 확인</title>
+<style>
+  :root {
+    --ink: #21262b;
+    --paper: #f6f4ef;
+    --line: #d8d3c6;
+    --accent: #2f5d50;
+    --accent-soft: #e4ede9;
+    --err: #a13a3a;
+    --err-soft: #f7e9e9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    width: 100%;
+    max-width: 380px;
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .icon { font-size: 30px; margin-bottom: 10px; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  p.desc { font-size: 13.5px; color: #565c55; line-height: 1.6; margin: 0 0 20px; }
+  input {
+    width: 100%;
+    padding: 13px;
+    font-size: 20px;
+    letter-spacing: 3px;
+    text-align: center;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    width: 100%;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button:disabled { background: #b9b6ab; cursor: not-allowed; }
+  .msg { font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .msg.err { color: var(--err); }
+  .msg.ok { color: var(--accent); }
+  .result-link {
+    display: block;
+    margin-top: 16px;
+    padding: 13px;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 9px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .missing {
+    font-size: 13.5px;
+    color: var(--err);
+    background: var(--err-soft);
+    border-radius: 8px;
+    padding: 12px;
+  }
+</style>
+</head>
+<body>
+  <div class="card" id="card">불러오는 중...</div>
+
+<script>
+(async function () {
+  const card = document.getElementById('card');
+  const params = new URLSearchParams(location.search);
+  const fileLink = params.get('f');
+  const hash = params.get('h');
+  const name = params.get('n') || '';
+
+  if (!fileLink || !hash) {
+    card.innerHTML = `<div class="missing">잘못된 링크예요. 문자를 다시 확인해주시거나 병원으로 문의해주세요.</div>`;
+    return;
+  }
+
+  async function sha256Hex(str) {
+    const enc = new TextEncoder().encode(str);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  let attempts = 0;
+  const MAX_ATTEMPTS = 5;
+
+  card.innerHTML = `
+    <div class="icon">🔒</div>
+    <h1>${name ? name + '님, ' : ''}본인확인</h1>
+    <p class="desc">본인인증 확인차 생년월일 앞자리를 입력하세요<br>(예: 1995년 8월 21일생 → 19950821)</p>
+    <input id="pw" type="tel" inputmode="numeric" maxlength="8" placeholder="19950821" />
+    <button id="submitBtn">확인</button>
+    <div class="msg" id="msg"></div>
+  `;
+
+  const pwInput = document.getElementById('pw');
+  const submitBtn = document.getElementById('submitBtn');
+  const msg = document.getElementById('msg');
+
+  async function trySubmit() {
+    const val = pwInput.value.trim();
+    if (val.length !== 8) {
+      msg.textContent = '생년월일 8자리를 정확히 입력해주세요.';
+      msg.className = 'msg err';
+      return;
+    }
+    const inputHash = await sha256Hex(val);
+    if (inputHash === hash) {
+      card.innerHTML = `
+        <div class="icon">✅</div>
+        <h1>본인확인 완료</h1>
+        <p class="desc">아래 버튼을 눌러 결과지를 확인하세요.</p>
+        <a class="result-link" href="${fileLink}" target="_blank" rel="noopener">결과지 열기</a>
+      `;
+    } else {
+      attempts++;
+      if (attempts >= MAX_ATTEMPTS) {
+        msg.textContent = '너무 많이 틀렸어요. 병원으로 문의해주세요.';
+        msg.className = 'msg err';
+        submitBtn.disabled = true;
+        pwInput.disabled = true;
+      } else {
+        msg.textContent = `생년월일이 일치하지 않아요. (${MAX_ATTEMPTS - attempts}회 남음)`;
+        msg.className = 'msg err';
+      }
+    }
+  }
+
+  submitBtn.addEventListener('click', trySubmit);
+  pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') trySubmit(); });
+  pwInput.focus();
+})();
+</script>
+</body>
+</html>
